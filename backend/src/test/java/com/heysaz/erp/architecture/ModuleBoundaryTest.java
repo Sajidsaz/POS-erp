@@ -27,7 +27,7 @@ class ModuleBoundaryTest {
 
     private static final List<String> MODULES =
             List.of("finance", "identity", "organization", "catalog", "inventory", "pos",
-                    "purchasing", "customer");
+                    "purchasing", "customer", "integration");
 
     private final JavaClasses classes = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -82,6 +82,9 @@ class ModuleBoundaryTest {
         List<String> allowed = List.of(
                 "platform/config/DataAccessConfig.java",
                 "platform/outbox/OutboxWorker.java",
+                // The signed webhook dispatcher spans tenants exactly as the worker does; it
+                // runs inside the worker's elevated transaction (FR-API-002).
+                "platform/outbox/WebhookOutboxDispatcher.java",
                 "platform/security/TokenService.java",
                 // Login reads platform.app_user before any tenant is known. Everything it
                 // then needs from tenant-scoped tables — permissions, shop scope — goes

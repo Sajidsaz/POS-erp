@@ -6,7 +6,17 @@ requirement IDs in code comments (`FR-…`, `SEC-…`, `DB-…`) refer to that d
 
 ## Status
 
-**M4 — commerce** (in progress).
+**M5 — downstream** (in progress). Signed webhook delivery (FR-API-002 / FR-API-003) is
+done: a tenant subscribes an endpoint to event types, and the outbox worker delivers each
+committed event signed with HMAC-SHA256 over `<timestamp>.<body>` (timestamp inside the
+signature defeats replay). Delivery reuses the worker's bounded exponential backoff; every
+`(subscription, event)` pair gets one delivery record, so a retry skips subscribers that
+already succeeded and never double-delivers, and the final attempt moves a still-failing
+delivery to a visible `DEAD` state. Subscriptions and their delivery logs are managed under
+`/api/v1/integrations/webhooks`. Still to come in M5: reports and exports, schedules, and
+notifications.
+
+**M4 — commerce** (backend complete; POS Tauri client still to come).
 
 *Returns, refunds and exchanges* — a restockable return goes back into stock with its own
 `RETURN` movement (FR-RET-003) while damaged and defective goods are recorded but not
@@ -111,6 +121,7 @@ backend/          Spring Boot, Java 21. One deployable, package-per-module.
   pos/            Checkout, sales, payments, held carts, receipts, shifts, returns, exchanges
   purchasing/     Suppliers, purchase orders, goods receipts (feeds moving-average cost)
   customer/       Customer accounts, credit limits, store-credit ledger, on-account tender
+  integration/    Webhook subscriptions and delivery logs (signed delivery lives in platform)
   finance/        The M0 vertical slice; the template every later module copies
   resources/db/migration/   Flyway — the schema source of truth
 docs/             SRS v3.1
@@ -141,12 +152,14 @@ Known gaps rather than oversights:
   earns its keep when M5's reporting queries arrive.
 - **Frontend** — no `frontend/` yet. The checkout, shift and receipt APIs exist; the POS
   Tauri shell that drives them arrives in M4.
-- **Webhook delivery** — the outbox drains to a logging dispatcher. Signed delivery
-  (FR-API-002) arrives at M5 with actual subscribers.
+- **Event naming** — the outbox emits internal names like `pos.sale_completed`, whereas
+  FR-API-001 lists canonical names such as `sale.completed`. Subscriptions match on the
+  emitted names today; reconciling the two (an event-name mapping, or renaming at the
+  publish sites) is a small, tracked follow-up.
 
 ## Next
 
-The M4 backend is complete. What remains for M4 is the **Tauri POS desktop client** — the
+Continue M5 — reporting and exports (where jOOQ finally earns its place), scheduled jobs, and
+user/channel notifications. Still open from M4: the **Tauri POS desktop client** — the
 offline-capable till UI with ESC/POS receipt printing, driving the checkout, shift, return
-and on-account tender APIs. After that, M5 — reporting and exports, schedules, notifications,
-and signed webhook delivery — is where jOOQ finally earns its place.
+and on-account tender APIs.
