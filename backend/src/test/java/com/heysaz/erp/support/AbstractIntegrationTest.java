@@ -64,6 +64,10 @@ public abstract class AbstractIntegrationTest {
 
         // The worker would otherwise race the assertions in outbox tests.
         registry.add("erp.outbox.poll-interval-ms", () -> "600000");
+
+        // Keep the periodic reorder-alert sweep from firing mid-suite and racing assertions.
+        registry.add("erp.notifications.reorder-sweep-interval-ms", () -> "3600000");
+        registry.add("erp.notifications.reorder-sweep-initial-delay-ms", () -> "3600000");
     }
 
     @Autowired

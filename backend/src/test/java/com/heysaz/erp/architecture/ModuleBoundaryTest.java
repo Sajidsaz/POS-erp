@@ -27,7 +27,7 @@ class ModuleBoundaryTest {
 
     private static final List<String> MODULES =
             List.of("finance", "identity", "organization", "catalog", "inventory", "pos",
-                    "purchasing", "customer", "integration");
+                    "purchasing", "customer", "integration", "reporting", "notifications");
 
     private final JavaClasses classes = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -85,6 +85,9 @@ class ModuleBoundaryTest {
                 // The signed webhook dispatcher spans tenants exactly as the worker does; it
                 // runs inside the worker's elevated transaction (FR-API-002).
                 "platform/outbox/WebhookOutboxDispatcher.java",
+                // Lists every tenant for the periodic schedulers, exactly the outbox worker's
+                // justification; it returns only ids and does the per-tenant work under RLS.
+                "platform/tenant/TenantDirectory.java",
                 "platform/security/TokenService.java",
                 // Login reads platform.app_user before any tenant is known. Everything it
                 // then needs from tenant-scoped tables — permissions, shop scope — goes

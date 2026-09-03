@@ -6,15 +6,32 @@ requirement IDs in code comments (`FR-…`, `SEC-…`, `DB-…`) refer to that d
 
 ## Status
 
-**M5 — downstream** (in progress). Signed webhook delivery (FR-API-002 / FR-API-003) is
-done: a tenant subscribes an endpoint to event types, and the outbox worker delivers each
-committed event signed with HMAC-SHA256 over `<timestamp>.<body>` (timestamp inside the
-signature defeats replay). Delivery reuses the worker's bounded exponential backoff; every
-`(subscription, event)` pair gets one delivery record, so a retry skips subscribers that
-already succeeded and never double-delivers, and the final attempt moves a still-failing
-delivery to a visible `DEAD` state. Subscriptions and their delivery logs are managed under
-`/api/v1/integrations/webhooks`. Still to come in M5: reports and exports, schedules, and
-notifications.
+**M5 — downstream** (in progress).
+
+*Reporting and exports* — sales summary (with gross profit read from each sale line's cost
+snapshot, decision D2, never recomputed from today's average), sales-by-day, top products,
+payment mix, and inventory valuation at moving-average cost, plus a CSV export of
+sales-by-day. All read-only aggregates over the same RLS-bound tables, under
+`/api/v1/reports`. (Day boundaries fall on the UTC date for now; per-shop timezone
+boundaries per DB-005 are a tracked refinement.)
+
+*Signed webhook delivery* (FR-API-002 / FR-API-003) — a tenant subscribes an endpoint to
+event types, and the outbox worker delivers each committed event signed with HMAC-SHA256
+over `<timestamp>.<body>` (timestamp inside the signature defeats replay). Delivery reuses
+the worker's bounded exponential backoff; every `(subscription, event)` pair gets one
+delivery record, so a retry skips subscribers that already succeeded and never
+double-delivers, and the final attempt moves a still-failing delivery to a visible `DEAD`
+state. Managed under `/api/v1/integrations/webhooks`.
+
+*Notifications and scheduled jobs* — in-app notifications with an email seam that activates
+only where a provider is configured (FR-NOT-002) and per-user, per-type, per-channel
+preferences (FR-NOT-003), under `/api/v1/notifications`. A reorder-alert sweep (FR-INV-013)
+raises one alert per variant that has fallen to or below its reorder point, de-duplicated
+against still-unread alerts; a cross-tenant scheduler runs it per tenant through
+`runAsOrg` on the RLS-bound pool, listing tenants via a small platform directory that is the
+only new use of the elevated connection.
+
+M5 backend is essentially complete.
 
 **M4 — commerce** (backend complete; POS Tauri client still to come).
 
@@ -122,6 +139,8 @@ backend/          Spring Boot, Java 21. One deployable, package-per-module.
   purchasing/     Suppliers, purchase orders, goods receipts (feeds moving-average cost)
   customer/       Customer accounts, credit limits, store-credit ledger, on-account tender
   integration/    Webhook subscriptions and delivery logs (signed delivery lives in platform)
+  reporting/      Read-only sales, margin, payment-mix and valuation reports; CSV export
+  notifications/  In-app notifications, per-user preferences, reorder-alert sweep + scheduler
   finance/        The M0 vertical slice; the template every later module copies
   resources/db/migration/   Flyway — the schema source of truth
 docs/             SRS v3.1
@@ -135,23 +154,26 @@ without a boundary rule is a module without a boundary.
 ## Two connection pools
 
 The application connects as `erp_app`, which is **subject to** row-level security and has
-`NOBYPASSRLS`. A second, small pool connects as the owner and bypasses RLS. It is
-reserved for the only two things that genuinely have no tenant: authentication, which runs
-before a tenant is known, and the outbox worker, which spans all of them. Everything else
-uses the primary pool (DB-011), and `ModuleBoundaryTest` fails the build if that spreads.
+`NOBYPASSRLS`. A second, small pool connects as the owner and bypasses RLS. It is reserved
+for the few things that genuinely have no single tenant: authentication, which runs before a
+tenant is known; the outbox worker and its webhook dispatcher, which span all tenants; and
+the tenant directory that periodic schedulers use to enumerate tenants before doing each
+one's work back under RLS via `runAsOrg`. Everything else uses the primary pool (DB-011),
+and `ModuleBoundaryTest` fails the build if that spreads.
 
 ## Not yet done
 
 Known gaps rather than oversights:
 
-- **jOOQ** — still deferred to M5, and this is a judgement call worth stating plainly.
-  Codegen needs a migrated database at build time, which would put Docker on the critical
-  path for every compile. With the host Gradle currently unusable (see Tests above), moving
-  the whole data-access layer onto a toolchain that cannot be exercised locally would be
-  swapping working code for unverifiable code. `JdbcClient` carries M1 through M4 fine; jOOQ
-  earns its keep when M5's reporting queries arrive.
-- **Frontend** — no `frontend/` yet. The checkout, shift and receipt APIs exist; the POS
-  Tauri shell that drives them arrives in M4.
+- **jOOQ** — still deferred, and this is a judgement call worth stating plainly. Codegen
+  needs a migrated database at build time, which would put Docker on the critical path for
+  every compile. With the host Gradle currently unusable (see Tests above), moving the whole
+  data-access layer onto a toolchain that cannot be exercised locally would be swapping
+  working code for unverifiable code. `JdbcClient` has carried M1 through M5's reporting
+  aggregates fine; jOOQ earns its keep if the reporting queries grow beyond what hand-written
+  SQL keeps legible.
+- **Frontend** — no `frontend/` yet. The checkout, shift, receipt, return and on-account
+  tender APIs all exist; the POS Tauri shell that drives them is the outstanding M4 item.
 - **Event naming** — the outbox emits internal names like `pos.sale_completed`, whereas
   FR-API-001 lists canonical names such as `sale.completed`. Subscriptions match on the
   emitted names today; reconciling the two (an event-name mapping, or renaming at the
@@ -159,7 +181,8 @@ Known gaps rather than oversights:
 
 ## Next
 
-Continue M5 — reporting and exports (where jOOQ finally earns its place), scheduled jobs, and
-user/channel notifications. Still open from M4: the **Tauri POS desktop client** — the
-offline-capable till UI with ESC/POS receipt printing, driving the checkout, shift, return
-and on-account tender APIs.
+M6 — hardening: load tests, backup/restore drills, MFA, and the R1 exit gate. Still open
+from M4: the **Tauri POS desktop client** — the offline-capable till UI with ESC/POS receipt
+printing, driving the checkout, shift, return and on-account tender APIs. Optional M5
+follow-ups: scheduled report generation (the `SCHEDULED_REPORT` notification type already
+exists) and richer notification producers wired into the remaining events in FR-NOT-001.
