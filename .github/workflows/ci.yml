@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# OPS-004: unit tests, integration tests, architecture rules, the tenant-isolation suite
+# and dependency scanning all gate the build. A failure in any of them is a red build,
+# not a warning someone reads later.
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Testcontainers needs a Docker daemon; ubuntu-latest ships one.
+      #
+      # This step also covers the first half of TEST-010: every run migrates a brand new
+      # PostgreSQL container from empty, so a migration that only works against an
+      # already-migrated developer database fails here. The second half — migrating a
+      # representative production-shaped dataset — arrives with M1, when there is a
+      # dataset worth shaping.
+      - name: Build and test
+        working-directory: backend
+        run: ./gradlew build --no-daemon
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/build/reports/tests/test
+
+  dependency-scan:
+    name: Dependency scan
+    runs-on: ubuntu-latest
+    # SEC-014. The remediation window by severity is policy, not something the scanner
+    # decides; this step surfaces findings so that policy has something to act on.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true

@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: heysaz-erp
+
+  # DB-011: the application connects as erp_app, which is subject to row-level security.
+  datasource:
+    url: ${ERP_DB_URL:jdbc:postgresql://localhost:5432/heysaz}
+    username: ${ERP_DB_USER:erp_app}
+    password: ${ERP_DB_PASSWORD:erp_app}
+    hikari:
+      maximum-pool-size: 20
+
+  # Migrations run as the owner. OPS-003 / DB-008: versioned, forward-only.
+  flyway:
+    enabled: true
+    url: ${ERP_DB_URL:jdbc:postgresql://localhost:5432/heysaz}
+    user: ${ERP_DB_OWNER_USER:heysaz}
+    password: ${ERP_DB_OWNER_PASSWORD:heysaz}
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${ERP_REDIS_HOST:localhost}
+      port: ${ERP_REDIS_PORT:6379}
+
+  session:
+    store-type: redis
+    timeout: 8h
+
+  jackson:
+    default-property-inclusion: non_null
+
+erp:
+  datasource:
+    # The RLS escape hatch. Used only by authentication and the outbox worker.
+    elevated:
+      url: ${ERP_DB_URL:jdbc:postgresql://localhost:5432/heysaz}
+      username: ${ERP_DB_OWNER_USER:heysaz}
+      password: ${ERP_DB_OWNER_PASSWORD:heysaz}
+  auth:
+    access-token-ttl: PT15M
+    refresh-token-ttl: P30D
+  idempotency:
+    retention: PT24H   # FR-API-011 requires at least 24 hours
+  outbox:
+    poll-interval-ms: 1000
+
+server:
+  port: ${ERP_PORT:8080}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${ERP_COOKIE_SECURE:false}   # true in every deployed environment
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.heysaz.erp: INFO

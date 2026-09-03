@@ -1,0 +1,37 @@
+# Build output
+build/
+out/
+bin/
+target/
+*.class
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Node
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Tauri
+src-tauri/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Local environment — never commit real credentials (SEC-009, OPS-005)
+.env
+.env.local
+*.local.yaml
+application-local.yaml
+
+# OS
+.DS_Store
+Thumbs.db
