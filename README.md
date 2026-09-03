@@ -6,14 +6,30 @@ requirement IDs in code comments (`FR-…`, `SEC-…`, `DB-…`) refer to that d
 
 ## Status
 
-**M4 — commerce** (in progress). Returns, refunds and exchanges are done: a restockable
-return goes back into stock with its own `RETURN` movement (FR-RET-003) while damaged and
-defective goods are recorded but not restocked; a return against a known sale is capped at
-what was sold and moves the sale to `PARTIALLY_RETURNED` or `RETURNED`; refund tenders must
-reconcile to the line refund total; and an exchange is a return and a sale in one
-transaction, reporting the net the customer settles. Gapless RETURN numbers (D5) and
-idempotent retries (FR-API-012) as elsewhere. Still to come in M4: customers and credit,
-purchasing and receiving, and the Tauri POS desktop client.
+**M4 — commerce** (in progress).
+
+*Returns, refunds and exchanges* — a restockable return goes back into stock with its own
+`RETURN` movement (FR-RET-003) while damaged and defective goods are recorded but not
+restocked; a return against a known sale is capped at what was sold and moves the sale to
+`PARTIALLY_RETURNED` or `RETURNED`; refund tenders must reconcile to the line refund total;
+and an exchange is a return and a sale in one transaction, reporting the net the customer
+settles.
+
+*Purchasing and receiving* — suppliers, purchase orders, and goods receipts. A receipt
+lands stock through the inventory module's `RECEIPT` movement, so the moving weighted
+average (decision D2) is maintained in one place; a purchase order tracks received quantity
+and moves to `PARTIALLY_RECEIVED` / `RECEIVED`, over-receipt is refused, and direct (blind)
+receipts without an order are supported. Gapless PO and GRN numbers (D5) and idempotent
+retries (FR-API-012) throughout.
+
+*Customers and store credit* — customer accounts with a credit limit and an append-only
+ledger the on-row balance can be reconstructed from. An on-account `CREDIT` tender at the
+till charges the customer inside the checkout transaction and refuses to breach the limit,
+so a rejected charge unwinds the whole sale; payments settle the balance. Charges and
+payments lock the customer row (decision D6 applied to credit) so concurrent sales cannot
+push a customer past their limit.
+
+Still to come in M4: the Tauri POS desktop client.
 
 **M3 — POS & checkout** (complete). Cart pricing and checkout with per-line tax rounding, tax-inclusive base derivation and nearest-rupee cash rounding on its own line (decision D4 / FR-POS-014); gapless SALE numbers (decision D5); stock decremented under a pessimistic lock taken in variant order (decision D6) with a cost snapshot on every sale line (decision D2 / invariant B7); multi-tender payments, held carts, receipts with a per-rate tax breakdown, and audited reprints. Cashier shifts with cash-drawer movements and derived X/Z cash reconciliation (Section 7.3). Retried checkouts replay rather than ringing a second sale (FR-API-012). The gapless-sequence service moved into the platform kernel (`platform/sequence`) so POS, transfers and future purchasing share one implementation. The Tauri POS shell is deferred to M4 alongside its first offline concerns.
 
@@ -93,6 +109,8 @@ backend/          Spring Boot, Java 21. One deployable, package-per-module.
   catalog/        Products, variants, units, barcodes, price lists, tax classes
   inventory/      Stock balances, movements, adjustments, counts, inter-shop transfers
   pos/            Checkout, sales, payments, held carts, receipts, shifts, returns, exchanges
+  purchasing/     Suppliers, purchase orders, goods receipts (feeds moving-average cost)
+  customer/       Customer accounts, credit limits, store-credit ledger, on-account tender
   finance/        The M0 vertical slice; the template every later module copies
   resources/db/migration/   Flyway — the schema source of truth
 docs/             SRS v3.1
@@ -119,7 +137,7 @@ Known gaps rather than oversights:
   Codegen needs a migrated database at build time, which would put Docker on the critical
   path for every compile. With the host Gradle currently unusable (see Tests above), moving
   the whole data-access layer onto a toolchain that cannot be exercised locally would be
-  swapping working code for unverifiable code. `JdbcClient` carries M1 through M3 fine; jOOQ
+  swapping working code for unverifiable code. `JdbcClient` carries M1 through M4 fine; jOOQ
   earns its keep when M5's reporting queries arrive.
 - **Frontend** — no `frontend/` yet. The checkout, shift and receipt APIs exist; the POS
   Tauri shell that drives them arrives in M4.
@@ -128,6 +146,7 @@ Known gaps rather than oversights:
 
 ## Next
 
-Finish M4 — customers and credit (accounts, limits, on-account tender at the till),
-purchasing and receiving (purchase orders, goods receipts feeding moving-average cost), and
-the Tauri POS desktop client with ESC/POS receipt printing over the M3/M4 APIs.
+The M4 backend is complete. What remains for M4 is the **Tauri POS desktop client** — the
+offline-capable till UI with ESC/POS receipt printing, driving the checkout, shift, return
+and on-account tender APIs. After that, M5 — reporting and exports, schedules, notifications,
+and signed webhook delivery — is where jOOQ finally earns its place.

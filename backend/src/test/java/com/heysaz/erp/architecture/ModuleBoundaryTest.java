@@ -26,7 +26,8 @@ import com.tngtech.archunit.core.importer.ImportOption;
 class ModuleBoundaryTest {
 
     private static final List<String> MODULES =
-            List.of("finance", "identity", "organization", "catalog", "inventory", "pos");
+            List.of("finance", "identity", "organization", "catalog", "inventory", "pos",
+                    "purchasing", "customer");
 
     private final JavaClasses classes = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

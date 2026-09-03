@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heysaz.erp.catalog.api.PricingService;
+import com.heysaz.erp.customer.api.CustomerService;
 import com.heysaz.erp.inventory.api.InventoryService;
 import com.heysaz.erp.inventory.api.MovementType;
 import com.heysaz.erp.platform.audit.AuditService;
@@ -49,6 +50,7 @@ class PosServiceImpl implements PosService {
     private final PosRepository repository;
     private final PricingService pricing;
     private final InventoryService inventory;
+    private final CustomerService customers;
     private final DocumentSequenceService sequences;
     private final IdempotencyService idempotency;
     private final AuditService audit;
@@ -56,11 +58,13 @@ class PosServiceImpl implements PosService {
     private final ObjectMapper mapper;
 
     PosServiceImpl(PosRepository repository, PricingService pricing, InventoryService inventory,
-                   DocumentSequenceService sequences, IdempotencyService idempotency,
-                   AuditService audit, OutboxPublisher outbox, ObjectMapper mapper) {
+                   CustomerService customers, DocumentSequenceService sequences,
+                   IdempotencyService idempotency, AuditService audit, OutboxPublisher outbox,
+                   ObjectMapper mapper) {
         this.repository = repository;
         this.pricing = pricing;
         this.inventory = inventory;
+        this.customers = customers;
         this.sequences = sequences;
         this.idempotency = idempotency;
         this.audit = audit;
@@ -294,6 +298,19 @@ class PosServiceImpl implements PosService {
                     p.amount().amount(), p.reference(),
                     p.tenderedAmount() == null ? null : p.tenderedAmount().amount(),
                     change.amount());
+        }
+
+        // On-account tender charges the customer's credit; the charge refuses to breach the
+        // limit, and because it shares this transaction a rejection unwinds the whole sale.
+        Money creditTotal = command.payments().stream()
+                .filter(p -> p.method() == PaymentMethod.CREDIT)
+                .map(PaymentInput::amount)
+                .reduce(Money.ZERO, Money::plus);
+        if (!creditTotal.isZero()) {
+            if (command.customerId() == null) {
+                throw ApiException.conflict("A credit tender requires a customer");
+            }
+            customers.chargeCredit(command.customerId(), creditTotal, "SALE", invoiceNumber);
         }
 
         SaleView view = repository.findSale(saleId).orElseThrow();
