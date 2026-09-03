@@ -6,6 +6,15 @@ requirement IDs in code comments (`FR-…`, `SEC-…`, `DB-…`) refer to that d
 
 ## Status
 
+**M4 — commerce** (in progress). Returns, refunds and exchanges are done: a restockable
+return goes back into stock with its own `RETURN` movement (FR-RET-003) while damaged and
+defective goods are recorded but not restocked; a return against a known sale is capped at
+what was sold and moves the sale to `PARTIALLY_RETURNED` or `RETURNED`; refund tenders must
+reconcile to the line refund total; and an exchange is a return and a sale in one
+transaction, reporting the net the customer settles. Gapless RETURN numbers (D5) and
+idempotent retries (FR-API-012) as elsewhere. Still to come in M4: customers and credit,
+purchasing and receiving, and the Tauri POS desktop client.
+
 **M3 — POS & checkout** (complete). Cart pricing and checkout with per-line tax rounding, tax-inclusive base derivation and nearest-rupee cash rounding on its own line (decision D4 / FR-POS-014); gapless SALE numbers (decision D5); stock decremented under a pessimistic lock taken in variant order (decision D6) with a cost snapshot on every sale line (decision D2 / invariant B7); multi-tender payments, held carts, receipts with a per-rate tax breakdown, and audited reprints. Cashier shifts with cash-drawer movements and derived X/Z cash reconciliation (Section 7.3). Retried checkouts replay rather than ringing a second sale (FR-API-012). The gapless-sequence service moved into the platform kernel (`platform/sequence`) so POS, transfers and future purchasing share one implementation. The Tauri POS shell is deferred to M4 alongside its first offline concerns.
 
 **M2 — inventory** (complete). Stock balances per shop and variant, append-only stock movements, adjustments, physical stock counts with reconciliation, inter-shop transfers with in-transit tracking and discrepancy handling, gapless document sequence numbers (decision D5), and moving weighted average costing (decision D2). Eight migrations, five modules.
@@ -83,7 +92,7 @@ backend/          Spring Boot, Java 21. One deployable, package-per-module.
   organization/   Shops, terminals, document sequences
   catalog/        Products, variants, units, barcodes, price lists, tax classes
   inventory/      Stock balances, movements, adjustments, counts, inter-shop transfers
-  pos/            Checkout, sales, payments, held carts, receipts, shifts, X/Z reports
+  pos/            Checkout, sales, payments, held carts, receipts, shifts, returns, exchanges
   finance/        The M0 vertical slice; the template every later module copies
   resources/db/migration/   Flyway — the schema source of truth
 docs/             SRS v3.1
@@ -119,6 +128,6 @@ Known gaps rather than oversights:
 
 ## Next
 
-M4 — commerce: returns, exchanges and refunds (the `sale_return` tables and `ReturnService`
-API already exist, awaiting their implementation), customers and credit, purchasing and
-receiving, and the Tauri POS desktop client with ESC/POS receipt printing over the M3 APIs.
+Finish M4 — customers and credit (accounts, limits, on-account tender at the till),
+purchasing and receiving (purchase orders, goods receipts feeding moving-average cost), and
+the Tauri POS desktop client with ESC/POS receipt printing over the M3/M4 APIs.
