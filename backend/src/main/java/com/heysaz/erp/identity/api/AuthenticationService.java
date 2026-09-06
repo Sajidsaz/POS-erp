@@ -16,7 +16,9 @@ public interface AuthenticationService {
 
     enum ClientType { ADMIN, POS }
 
-    record Credentials(String email, String password, ClientType clientType, String terminalCode) {
+    record Credentials(String email, String password, ClientType clientType, String terminalCode,
+                       /** Second factor (TOTP or recovery code); null on the first step. */
+                       String mfaCode) {
     }
 
     /**

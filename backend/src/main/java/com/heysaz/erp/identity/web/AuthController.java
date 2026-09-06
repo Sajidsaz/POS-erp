@@ -43,7 +43,9 @@ public class AuthController {
             @NotBlank String password,
             AuthenticationService.ClientType clientType,
             /** Required for POS; identifies the terminal for FR-TERM-003 and idempotency scope. */
-            String terminalCode) {
+            String terminalCode,
+            /** MFA code (TOTP or recovery); supplied after a first attempt returns MFA_REQUIRED. */
+            String mfaCode) {
     }
 
     public record SessionResponse(UUID userId, UUID orgId, String displayName,
@@ -75,7 +77,7 @@ public class AuthController {
         Principal principal = authentication
                 .authenticate(new AuthenticationService.Credentials(
                         request.email(), request.password(),
-                        request.clientType(), request.terminalCode()))
+                        request.clientType(), request.terminalCode(), request.mfaCode()))
                 .orElseThrow(() -> {
                     throttle.recordFailure(request.email(), http.getRemoteAddr());
                     return new ApiException(ApiException.ErrorCode.UNAUTHENTICATED,

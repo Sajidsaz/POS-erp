@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.heysaz.erp.identity.api.AuthenticationService;
 import com.heysaz.erp.identity.api.IdentityService;
+import com.heysaz.erp.identity.api.MfaService;
 import com.heysaz.erp.platform.error.ApiException;
 import com.heysaz.erp.platform.tenant.Principal;
 
@@ -33,13 +34,16 @@ class AuthenticationServiceImpl implements AuthenticationService {
     private final JdbcClient elevatedJdbc;
     private final PasswordEncoder passwordEncoder;
     private final IdentityService identityService;
+    private final MfaService mfaService;
 
     AuthenticationServiceImpl(@Qualifier("elevatedJdbcClient") JdbcClient elevatedJdbc,
                               PasswordEncoder passwordEncoder,
-                              IdentityService identityService) {
+                              IdentityService identityService,
+                              MfaService mfaService) {
         this.elevatedJdbc = elevatedJdbc;
         this.passwordEncoder = passwordEncoder;
         this.identityService = identityService;
+        this.mfaService = mfaService;
     }
 
     private record UserRow(UUID id, UUID orgId, String displayName, String passwordHash,
@@ -94,6 +98,23 @@ class AuthenticationServiceImpl implements AuthenticationService {
                 ? new IdentityService.Resolution(Set.of("platform.tenants", "platform.health"), Set.of())
                 : identityService.resolve(user.id(), user.orgId());
 
+        // Second factor (FR-AUTH-005 / FR-AUTH-007). The password already checked out; this
+        // decides whether that alone is enough.
+        if (mfaService.isEnabled(user.id())) {
+            if (credentials.mfaCode() == null || credentials.mfaCode().isBlank()) {
+                throw ApiException.mfaRequired();
+            }
+            if (!mfaService.verify(user.id(), credentials.mfaCode())) {
+                return Optional.empty(); // A wrong second factor is an authentication failure.
+            }
+        } else if (isPrivileged(user, resolution)
+                && mfaService.isOrgMfaRequired(user.orgId())) {
+            // FR-AUTH-007: policy makes MFA mandatory for privileged accounts. They must enrol
+            // (while the policy is off, or via an administrator) before they can sign in again.
+            throw ApiException.forbidden(
+                    "Your organization requires multi-factor authentication; enrol before signing in");
+        }
+
         Principal.PrincipalType type = user.platformOperator()
                 ? Principal.PrincipalType.PLATFORM_OPERATOR
                 : (pos ? Principal.PrincipalType.POS_TERMINAL : Principal.PrincipalType.USER_SESSION);
@@ -101,6 +122,12 @@ class AuthenticationServiceImpl implements AuthenticationService {
         return Optional.of(new Principal(type, user.id(), user.orgId(), user.displayName(),
                 resolution.shopScope(), resolution.authorities(),
                 credentials.terminalCode(), Instant.now()));
+    }
+
+    /** FR-AUTH-007's scope: Tenant Owner / Administrator (they hold user management) or a
+     * platform operator. */
+    private static boolean isPrivileged(UserRow user, IdentityService.Resolution resolution) {
+        return user.platformOperator() || resolution.authorities().contains("users_roles.write");
     }
 
     @Override

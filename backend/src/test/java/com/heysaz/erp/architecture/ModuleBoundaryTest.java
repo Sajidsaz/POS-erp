@@ -27,7 +27,7 @@ class ModuleBoundaryTest {
 
     private static final List<String> MODULES =
             List.of("finance", "identity", "organization", "catalog", "inventory", "pos",
-                    "purchasing", "customer", "integration", "reporting", "notifications");
+                    "purchasing", "customer", "integration", "reporting", "notifications", "hr");
 
     private final JavaClasses classes = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -92,7 +92,10 @@ class ModuleBoundaryTest {
                 // Login reads platform.app_user before any tenant is known. Everything it
                 // then needs from tenant-scoped tables — permissions, shop scope — goes
                 // through TenantContext.runAsOrg on the RLS-bound pool instead.
-                "identity/internal/AuthenticationServiceImpl.java");
+                "identity/internal/AuthenticationServiceImpl.java",
+                // MFA state is resolved during authentication, before a tenant exists, and
+                // lives in the platform schema alongside app_user (FR-AUTH-007).
+                "identity/internal/MfaServiceImpl.java");
 
         Path sourceRoot = Path.of("src/main/java/com/heysaz/erp");
         try (Stream<Path> files = Files.walk(sourceRoot)) {

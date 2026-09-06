@@ -44,9 +44,20 @@ public class ApiException extends RuntimeException {
                 "Idempotency key was already used with a different request body");
     }
 
+    /**
+     * FR-AUTH-005 / FR-AUTH-007: the password was correct but a second factor is needed.
+     * Distinct from a plain authentication failure so the client knows to prompt for a code
+     * and resubmit, rather than treating it as a wrong password.
+     */
+    public static ApiException mfaRequired() {
+        return new ApiException(ErrorCode.MFA_REQUIRED, HttpStatus.UNAUTHORIZED,
+                "A multi-factor authentication code is required");
+    }
+
     public enum ErrorCode {
         VALIDATION_FAILED,
         UNAUTHENTICATED,
+        MFA_REQUIRED,
         FORBIDDEN,
         NOT_FOUND,
         CONFLICT,

@@ -6,7 +6,22 @@ requirement IDs in code comments (`FR-…`, `SEC-…`, `DB-…`) refer to that d
 
 ## Status
 
-**M5 — downstream** (in progress).
+**HR — employees, attendance, leave** (complete). Employee records with an optional link to
+exactly one user account (FR-HR-006, so till and shift activity resolve to one person),
+live check-in/out with after-the-fact manual entries held for approval (FR-HR-002), and
+leave requests approved or rejected against a per-type balance (FR-HR-003), under
+`/api/v1/hr`. Payroll (FR-HR-004) is a MAY and out of R1, so it is deliberately not built.
+
+**M6 — hardening** (in progress). Multi-factor authentication (FR-AUTH-005 / FR-AUTH-007) is
+done: TOTP (RFC 6238) enrollment in two steps — a secret an authenticator app imports, then a
+confirming code before MFA turns on, so a mistyped setup can't lock an account out — with
+single-use recovery codes stored only as bcrypt hashes. Login gains a second-factor gate:
+once MFA is enabled, a correct password returns `MFA_REQUIRED` until a valid TOTP or recovery
+code is supplied, and an organization can make MFA mandatory for its privileged (Owner /
+Administrator) accounts. Managed under `/api/v1/auth/mfa`. Still to come in M6: load tests,
+backup/restore drills, and the R1 exit gate (largely operational rather than application code).
+
+**M5 — downstream** (complete).
 
 *Reporting and exports* — sales summary (with gross profit read from each sale line's cost
 snapshot, decision D2, never recomputed from today's average), sales-by-day, top products,
@@ -131,7 +146,7 @@ The four that matter most:
 ```
 backend/          Spring Boot, Java 21. One deployable, package-per-module.
   platform/       Shared kernel — tenant, money, error, audit, outbox, idempotency, sequence, security
-  identity/       Authentication, roles, the Section 5.2 permission matrix, shop scope
+  identity/       Authentication, MFA (TOTP + recovery codes), roles, permission matrix, shop scope
   organization/   Shops, terminals, document sequences
   catalog/        Products, variants, units, barcodes, price lists, tax classes
   inventory/      Stock balances, movements, adjustments, counts, inter-shop transfers
@@ -141,6 +156,7 @@ backend/          Spring Boot, Java 21. One deployable, package-per-module.
   integration/    Webhook subscriptions and delivery logs (signed delivery lives in platform)
   reporting/      Read-only sales, margin, payment-mix and valuation reports; CSV export
   notifications/  In-app notifications, per-user preferences, reorder-alert sweep + scheduler
+  hr/             Employees (with the user link), attendance, leave requests and balances
   finance/        The M0 vertical slice; the template every later module copies
   resources/db/migration/   Flyway — the schema source of truth
 docs/             SRS v3.1
@@ -181,8 +197,9 @@ Known gaps rather than oversights:
 
 ## Next
 
-M6 — hardening: load tests, backup/restore drills, MFA, and the R1 exit gate. Still open
-from M4: the **Tauri POS desktop client** — the offline-capable till UI with ESC/POS receipt
-printing, driving the checkout, shift, return and on-account tender APIs. Optional M5
-follow-ups: scheduled report generation (the `SCHEDULED_REPORT` notification type already
-exists) and richer notification producers wired into the remaining events in FR-NOT-001.
+Finish M6 — load tests against the Section 17 capacity targets, backup/restore drills, and the
+R1 exit gate. These are largely operational (scripts, infrastructure, runbooks) rather than
+application code, and are not exercised by the container test suite. Still open from M4: the
+**Tauri POS desktop client** — the offline-capable till UI with ESC/POS receipt printing.
+Optional follow-ups: scheduled report generation and wiring the remaining FR-NOT-001
+notification producers.
